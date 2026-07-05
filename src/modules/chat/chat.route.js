@@ -14,6 +14,7 @@ const {
   deleteConversationController,
   muteConversationController,
   archiveConversationController,
+  unarchiveConversationController,
   searchChatsController
 } = require('./chat.controller')
 
@@ -57,6 +58,10 @@ router.patch(
 router.patch(
   '/:conversationId/archive',
   archiveConversationController
+)
+router.patch(
+  '/:conversationId/unarchive',
+  unarchiveConversationController
 )
 
 module.exports = router

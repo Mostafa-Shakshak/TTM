@@ -401,16 +401,19 @@ async function updateGroup(
 
   return group
 }
-
 async function addMembers(
   senderId,
   conversationId,
   members
 ) {
 
-  await requireAdmin(senderId, conversationId)
+  await requireAdmin(
+    senderId,
+    conversationId
+  )
 
-  const uniqueMembers = [...new Set(members || [])]
+  const uniqueMembers =
+    [...new Set(members ?? [])]
 
   if (!uniqueMembers.length) {
     throw new Error('Members are required')
@@ -421,46 +424,64 @@ async function addMembers(
   }
 
   const users = await prisma.user.findMany({
-    where: { id: { in: uniqueMembers } },
-    select: { id: true }
+    where: {
+      id: {
+        in: uniqueMembers
+      }
+    },
+    select: {
+      id: true
+    }
   })
 
   if (users.length !== uniqueMembers.length) {
-    throw new Error('One or more users not found')
-  }
-
-  for (const memberId of uniqueMembers) {
-    const block = await getBlockRelationshipService(
-      senderId,
-      memberId
+    throw new Error(
+      'One or more users not found'
     )
-    if (block) {
-      throw new Error(
-        'Blocked users cannot be added to a group'
-      )
-    }
-
-    await prisma.conversationMember.upsert({
-      where: {
-        userId_conversationId: {
-          userId: memberId,
-          conversationId
-        }
-      },
-      update: {
-        leftAt: null,
-        removedAt: null,
-        deletedAt: null,
-        role: 'Member',
-        joinedAt: new Date()
-      },
-      create: {
-        userId: memberId,
-        conversationId,
-        role: 'Member'
-      }
-    })
   }
+
+  await prisma.$transaction(async trx => {
+
+    await Promise.all(
+      uniqueMembers.map(async memberId => {
+
+        const block =
+          await getBlockRelationshipService(
+            senderId,
+            memberId
+          )
+
+        if (block) {
+          throw new Error(
+            'Blocked users cannot be added to a group'
+          )
+        }
+
+        await trx.conversationMember.upsert({
+          where: {
+            userId_conversationId: {
+              userId: memberId,
+              conversationId
+            }
+          },
+          update: {
+            leftAt: null,
+            removedAt: null,
+            deletedAt: null,
+            role: 'Member',
+            joinedAt: new Date()
+          },
+          create: {
+            userId: memberId,
+            conversationId,
+            role: 'Member'
+          }
+        })
+
+      })
+    )
+
+  })
 
   return {
     message: 'Members added successfully'
@@ -672,7 +693,30 @@ async function archiveConversation(
     }
   })
 }
+async function unarchiveConversation(
+  senderId,
+  conversationId
+) {
 
+  const { member } =
+    await validateConversationMember(
+      senderId,
+      conversationId
+    )
+
+  await prisma.conversationMember.update({
+    where: {
+      id: member.id
+    },
+    data: {
+      archivedAt: null
+    }
+  })
+
+  return {
+    message: 'Conversation unarchived successfully'
+  }
+}
 async function searchChats(senderId, query) {
 
   if (!query || !query.trim()) {
@@ -712,5 +756,5 @@ module.exports = {
   archiveConversation,
   searchChats,
   validateConversationMember,
-  canMessageUser
+  canMessageUser,unarchiveConversation
 }

@@ -242,7 +242,6 @@ async function searchUsersService(
     take: 20
   })
 }
-
 async function updateProfileService(userId, data) {
 
   const {
@@ -253,24 +252,37 @@ async function updateProfileService(userId, data) {
     isPrivate
   } = data
 
-  if (name !== undefined && !name.trim()) {
-    throw new Error('Name cannot be empty')
+  if (typeof name !== 'string' || !name.trim()) {
+    throw new Error('Name is required')
+  }
+
+  const updateData = {
+    name: name.trim(),
+
+    bio:
+      bio == null
+        ? null
+        : bio.trim(),
+
+    isPrivate:
+      typeof isPrivate === 'boolean'
+        ? isPrivate
+        : undefined
+  }
+
+  if (profileImage !== undefined) {
+    updateData.profileImage = profileImage
+  }
+
+  if (coverImage !== undefined) {
+    updateData.coverImage = coverImage
   }
 
   const user = await prisma.user.update({
     where: {
       id: userId
     },
-    data: {
-      name: name?.trim(),
-      bio: bio === undefined ? undefined : bio.trim(),
-      profileImage,
-      coverImage,
-      isPrivate:
-        typeof isPrivate === 'boolean'
-          ? isPrivate
-          : undefined
-    },
+    data: updateData,
     select: {
       id: true,
       name: true,

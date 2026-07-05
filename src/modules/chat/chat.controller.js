@@ -11,7 +11,7 @@ const {
   deleteConversation,
   muteConversation,
   archiveConversation,
-  searchChats
+  searchChats,unarchiveConversation,
 } = require('./chat.service')
 
 async function createPrivateChatController(req, res) {
@@ -222,6 +222,20 @@ async function archiveConversationController(req, res) {
   }
 }
 
+async function unarchiveConversationController(req, res) {
+  try {
+    const result = await unarchiveConversation(
+      req.user.id,
+      req.params.conversationId
+    )
+
+    return res.status(200).json(result)
+  } catch (error) {
+    return res.status(400).json({
+      message: error.message
+    })
+  }
+}
 async function searchChatsController(req, res) {
   try {
     const chats = await searchChats(
@@ -250,5 +264,5 @@ module.exports = {
   deleteConversationController,
   muteConversationController,
   archiveConversationController,
-  searchChatsController
+  searchChatsController,unarchiveConversationController
 }

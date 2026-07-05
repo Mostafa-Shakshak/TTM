@@ -51,8 +51,15 @@ async function sendMessages(
   }
 
   if (conversationId) {
-    await validateConversationMember(senderId, conversationId)
-    await enforcePrivateMessageRules(senderId, conversationId)
+    await validateConversationMember(
+      senderId,
+      conversationId
+    )
+
+    await enforcePrivateMessageRules(
+      senderId,
+      conversationId
+    )
   } else {
     if (!receiverId) {
       throw new Error('Receiver is required')
@@ -92,8 +99,8 @@ async function sendMessages(
       }
     })
 
-    // Show the conversation again for users who previously deleted it.
-    // Do NOT reset messagesClearedAt so old messages remain hidden.
+    // Restore the conversation for anyone who had deleted it.
+    // Keep messagesClearedAt unchanged so old messages remain hidden.
     await trx.conversationMember.updateMany({
       where: {
         conversationId,
@@ -118,8 +125,12 @@ async function sendMessages(
       data: members.map(member => ({
         messageId: newMessage.id,
         userId: member.userId,
-        status: member.userId === senderId ? 'Seen' : 'Sent',
-        seenAt: member.userId === senderId ? new Date() : null
+        status: member.userId === senderId
+          ? 'Seen'
+          : 'Sent',
+        seenAt: member.userId === senderId
+          ? new Date()
+          : null
       }))
     })
 

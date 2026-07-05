@@ -1,0 +1,314 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  username     String   @unique
+  email        String   @unique
+  password     String
+  profileImage String?
+  coverImage   String?
+  bio          String?
+  isPrivate    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  post    Post[]    @relation("usersPosts")
+  comment comment[] @relation("WrittenComment")
+
+  likes like[] @relation("likedBy")
+
+  followers Follow[] @relation("userFollowing")
+
+  following Follow[] @relation("userFollowers")
+
+  conversation conversationMember[]
+  message      Mesaage[]            @relation("sendMessage")
+  reciept      messageReciept[]
+
+  authSession      AuthSession[]
+  passwordResetOtp PasswordResetOtp?
+
+  blockedUsers Block[] @relation("blockedUsers")
+  blockedBy    Block[] @relation("blockedBy")
+
+  receivedNotifications Notification[] @relation("receivedNotifications")
+  createdNotifications  Notification[] @relation("createdNotifications")
+}
+
+model Post {
+  id      String  @id @default(uuid())
+  content String?
+  image   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author        User           @relation("usersPosts", fields: [authorId], references: [id])
+  authorId      String
+  comments      comment[]      @relation("COP")
+  likes         like[]         @relation("likedPost")
+  notifications Notification[]
+
+  @@index([authorId])
+}
+
+model comment {
+  id      String  @id @default(uuid())
+  content String?
+  image   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author   User   @relation("WrittenComment", fields: [authorId], references: [id])
+  authorId String
+  posted   Post   @relation("COP", fields: [postedId], references: [id])
+  postedId String
+
+  notifications Notification[]
+
+  @@index([authorId])
+  @@index([postedId])
+}
+
+model like {
+  id String @id @default(uuid())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  likedBy   User   @relation("likedBy", fields: [likedById], references: [id])
+  likedById String
+
+  likedposts    Post   @relation("likedPost", fields: [likedPostedId], references: [id])
+  likedPostedId String
+
+  @@unique([likedById, likedPostedId])
+  @@index([likedById])
+  @@index([likedPostedId])
+}
+
+model Follow {
+  id String @id @default(uuid())
+
+  createdAt DateTime @default(now())
+
+  follower    User         @relation("userFollowers", fields: [followerId], references: [id])
+  followerId  String
+  following   User         @relation("userFollowing", fields: [followingId], references: [id])
+  followingId String
+  status      FollowStatus @default(Pending)
+
+  notifications Notification[]
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+enum FollowStatus {
+  Accepted
+  Rejected
+  Pending
+}
+
+model AuthSession {
+  id String @id @default(uuid())
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  refreshTokenHash String
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetOtp {
+  id String @id @default(uuid())
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @unique
+
+  otpHash   String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Block {
+  id String @id @default(uuid())
+
+  blocker   User   @relation("blockedUsers", fields: [blockerId], references: [id])
+  blockerId String
+
+  blocked   User   @relation("blockedBy", fields: [blockedId], references: [id])
+  blockedId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+enum NotificationType {
+  Like
+  Comment
+  FollowRequest
+  FollowAccepted
+}
+
+model Notification {
+  id   String           @id @default(uuid())
+  type NotificationType
+
+  recipient   User   @relation("receivedNotifications", fields: [recipientId], references: [id])
+  recipientId String
+
+  actor   User   @relation("createdNotifications", fields: [actorId], references: [id])
+  actorId String
+
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String?
+
+  relatedComment comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  commentId      String?
+
+  follow   Follow? @relation(fields: [followId], references: [id], onDelete: Cascade)
+  followId String?
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([recipientId, isRead])
+  @@index([createdAt])
+  @@index([actorId])
+}
+
+/**
+ * socket io
+ */
+
+enum ConversationType {
+  Private
+  Group
+}
+
+model Conversation {
+  id    String           @id @default(uuid())
+  type  ConversationType @default(Private)
+  name  String?
+  image String?
+
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  conversation conversationMember[]
+  message      Mesaage[]
+}
+
+enum ConversationRole {
+  Admin
+  Member
+}
+
+model conversationMember {
+  id String @id @default(uuid())
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId String
+
+  role     ConversationRole @default(Member)
+  joinedAt DateTime         @default(now())
+
+  messagesClearedAt DateTime?
+  leftAt     DateTime?
+  removedAt  DateTime?
+  mutedUntil DateTime?
+  archivedAt DateTime?
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([userId, conversationId])
+  @@index([userId])
+  @@index([conversationId])
+}
+
+model Mesaage {
+  id String @id @default(uuid())
+
+  content    String?
+  image      String?
+  attachment String?
+
+  sender   User   @relation("sendMessage", fields: [senderId], references: [id])
+  senderId String
+
+  conversation Conversation @relation(fields: [convId], references: [id])
+  convId       String
+
+  replyTo   Mesaage?  @relation("reply", fields: [replyToId], references: [id])
+  replyToId String?
+  replies   Mesaage[] @relation("reply")
+
+  editedAt DateTime?
+
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime         @updatedAt
+  reciept   messageReciept[]
+
+  @@index([senderId])
+  @@index([convId])
+  @@index([replyToId])
+}
+
+enum messageStatus {
+  Sent
+  Delivered
+  Seen
+}
+
+model messageReciept {
+  id String @id @default(uuid())
+
+  message   Mesaage @relation(fields: [messageId], references: [id])
+  messageId String
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  status messageStatus @default(Sent)
+
+  seenAt      DateTime?
+  deliveredAt DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}

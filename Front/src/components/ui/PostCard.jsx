@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Bookmark,
   Check,
@@ -7,7 +7,7 @@ import {
   LoaderCircle,
   MessageCircle,
   Pencil,
-  Send,
+  Repeat2,
   Trash2
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -21,6 +21,8 @@ import { formatCount, timeAgo } from '../../utils/formatters'
 import Avatar from '../common/Avatar'
 import Modal from '../common/Modal'
 import ImagePicker from './ImagePicker'
+import SharePostModal from './SharePostModal'
+import SharedPostPreview from './SharedPostPreview'
 
 export default function PostCard({ post, onDeleted, onUpdated, detail = false }) {
   const { user, isDemo } = useAuth()
@@ -29,6 +31,7 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
   const [menuOpen, setMenuOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [draft, setDraft] = useState({ content: post.content || '', image: post.image || '' })
   const [currentPost, setCurrentPost] = useState(post)
   const [liked, setLiked] = useState(Boolean(post.likedByMe))
@@ -38,6 +41,16 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
   const [busy, setBusy] = useState(false)
 
   const isOwner = user?.id === currentPost.authorId
+  const authorLink = `/profile/${currentPost.authorId}`
+  const canSaveEdit = Boolean(draft.content.trim() || draft.image.trim() || currentPost.sharedPost)
+
+  useEffect(() => {
+    setCurrentPost(post)
+    setDraft({ content: post.content || '', image: post.image || '' })
+    setLiked(Boolean(post.likedByMe))
+    setLikeId(post.likeId || null)
+    setLikeCount(post._count?.likes || 0)
+  }, [post])
 
   async function handleLike() {
     if (busy) return
@@ -63,7 +76,7 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
 
   async function handleUpdate(event) {
     event.preventDefault()
-    if (!draft.content.trim() && !draft.image.trim()) return
+    if (!canSaveEdit) return
     setBusy(true)
     try {
       const payload = {
@@ -71,7 +84,7 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
         image: draft.image.trim() || undefined
       }
       const updated = isDemo
-        ? { ...currentPost, ...payload, updatedAt: new Date().toISOString() }
+        ? { ...currentPost, ...payload, content: draft.content.trim() || null, image: draft.image.trim() || null, updatedAt: new Date().toISOString() }
         : await postsService.update(currentPost.id, payload)
       const hydrated = { ...currentPost, ...updated }
       if (isDemo) upsertDemoPost(hydrated)
@@ -102,11 +115,13 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
     }
   }
 
-  const authorLink = `/profile/${currentPost.authorId}`
+  function handleShared() {
+    setShareOpen(false)
+  }
 
   return (
     <>
-      <article className={`post-card ${detail ? 'post-card--detail' : ''}`}>
+      <article className={`post-card ${detail ? 'post-card--detail' : ''} ${currentPost.sharedPost ? 'post-card--shared' : ''}`}>
         <header className="post-card__header">
           <Link to={authorLink}><Avatar user={currentPost.author} size="md" /></Link>
           <div className="post-card__identity">
@@ -145,6 +160,8 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
           </div>
         </header>
 
+        {currentPost.sharedPost && <div className="post-card__share-label"><Repeat2 size={15} /><span>{currentPost.author?.name || 'Someone'} shared a post</span></div>}
+
         {currentPost.content && <p className="post-card__content">{currentPost.content}</p>}
 
         {currentPost.image && (
@@ -152,6 +169,8 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
             <img src={currentPost.image} alt="" />
           </Link>
         )}
+
+        {currentPost.sharedPost && <SharedPostPreview post={currentPost.sharedPost} />}
 
         <div className="post-card__actions">
           <button className={liked ? 'is-liked' : ''} onClick={handleLike} disabled={busy}>
@@ -162,8 +181,8 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
             <MessageCircle size={20} />
             <span>{formatCount(currentPost._count?.comments || currentPost.comments?.length || 0)}</span>
           </Link>
-          <button onClick={() => showToast('Share link copied.', 'info')}>
-            <Send size={19} />
+          <button onClick={() => setShareOpen(true)}>
+            <Repeat2 size={19} />
             <span>Share</span>
           </button>
           <button
@@ -185,12 +204,13 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
               onChange={(event) => setDraft((value) => ({ ...value, content: event.target.value }))}
               rows={5}
               maxLength={1200}
+              placeholder={currentPost.sharedPost ? 'Add or update your thoughts (optional)' : undefined}
             />
           </label>
           <label><span>Post image</span><ImagePicker type="post" value={draft.image} onChange={(image) => setDraft((value) => ({ ...value, image }))} /></label>
           <div className="modal-actions">
             <button type="button" className="button button--quiet" onClick={() => setEditOpen(false)}>Cancel</button>
-            <button className="button button--primary" disabled={busy}>
+            <button className="button button--primary" disabled={busy || !canSaveEdit}>
               {busy && <LoaderCircle size={17} className="spin" />}
               Save changes
             </button>
@@ -210,6 +230,8 @@ export default function PostCard({ post, onDeleted, onUpdated, detail = false })
           </div>
         </div>
       </Modal>
+
+      <SharePostModal open={shareOpen} onClose={() => setShareOpen(false)} post={currentPost} onShared={handleShared} />
     </>
   )
 }

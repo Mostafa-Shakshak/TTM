@@ -23,6 +23,11 @@ export const postsService = {
     return data.post
   },
 
+  async share(postId, payload) {
+    const { data } = await api.post(`/posts/${postId}/share`, payload)
+    return data.post
+  },
+
   async update(postId, payload) {
     const { data } = await api.patch(`/posts/${postId}`, payload)
     return data.post

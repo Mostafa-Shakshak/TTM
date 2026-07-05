@@ -46,6 +46,7 @@ model Post {
   id      String  @id @default(uuid())
   content String?
   image   String?
+  sharedPostId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -55,8 +56,11 @@ model Post {
   comments      comment[]      @relation("COP")
   likes         like[]         @relation("likedPost")
   notifications Notification[]
+  sharedPost    Post?          @relation("PostShares", fields: [sharedPostId], references: [id], onDelete: SetNull)
+  sharedPosts   Post[]         @relation("PostShares")
 
   @@index([authorId])
+  @@index([sharedPostId])
 }
 
 model comment {
@@ -169,6 +173,7 @@ model Block {
 enum NotificationType {
   Like
   Comment
+  Share
   FollowRequest
   FollowAccepted
 }

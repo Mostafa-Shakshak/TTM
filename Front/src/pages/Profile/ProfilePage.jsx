@@ -65,6 +65,22 @@ export default function ProfilePage() {
 
   useEffect(() => { loadProfile() }, [loadProfile])
 
+  useEffect(() => {
+    if (!isOwner) return undefined
+    const addPost = (event) => {
+      setPosts((current) => [event.detail, ...current.filter((item) => item.id !== event.detail.id)])
+      setProfile((current) => current ? {
+        ...current,
+        _count: {
+          ...current._count,
+          post: (current._count?.post || 0) + 1
+        }
+      } : current)
+    }
+    window.addEventListener('ttm:post-created', addPost)
+    return () => window.removeEventListener('ttm:post-created', addPost)
+  }, [isOwner])
+
   async function startMessage() {
     try {
       const chat = await chatService.createPrivate(profile.id)
@@ -91,7 +107,7 @@ export default function ProfilePage() {
     <div className="profile-topbar"><button className="icon-button" onClick={() => navigate(-1)} aria-label="Go back"><ArrowLeft size={20} /></button><span><strong>{profile.name}</strong><small>{formatCount(profile._count?.post)} posts</small></span></div>
     <section className="profile-hero"><div className="profile-cover">{profile.coverImage ? <img src={profile.coverImage} alt="" /> : <div className="profile-cover__fallback" />}</div><div className="profile-hero__body"><div className="profile-hero__actions"><Avatar user={profile} size="xl" className="profile-avatar" /><div>{isOwner ? <><button className="button button--secondary" onClick={() => setEditOpen(true)}>Edit profile</button><button className="icon-button profile-more" onClick={() => navigate('/settings')} aria-label="Account settings"><Settings size={19} /></button></> : <>{!profile.blockedByMe && <button className="button button--secondary" onClick={startMessage}><MessageCircle size={17} />Message</button>}<FollowButton profileId={profile.id} isPrivate={profile.isPrivate} initialFollow={follow} onChange={(status, nextFollow) => { setFollow(nextFollow); if (status === 'following') { setPrivateBlocked(false); usersService.getPosts(profile.id).then(setPosts).catch(() => {}) } }} disabled={profile.blockedByMe} /><div className="profile-menu"><button className="icon-button profile-more" onClick={() => setMenuOpen((value) => !value)} aria-label="More profile actions"><MoreHorizontal size={20} /></button>{menuOpen && <div className="context-menu"><button className="danger" onClick={toggleBlock}>{profile.blockedByMe ? <ShieldOff size={16} /> : <Ban size={16} />}{profile.blockedByMe ? 'Unblock user' : 'Block user'}</button></div>}</div></>}</div></div><div className="profile-copy"><h1>{profile.name}</h1><span>@{profile.username}</span><p>{profile.bio || 'This person is still writing their introduction.'}</p>{profile.isPrivate && <small className="private-badge"><LockKeyhole size={13} /> Private account</small>}</div><div className="profile-stats"><span><strong>{formatCount(profile._count?.post)}</strong> posts</span><span><strong>{formatCount(profile._count?.followers)}</strong> followers</span><span><strong>{formatCount(profile._count?.following)}</strong> following</span></div></div></section>
     <div className="profile-tabs"><button className="is-active"><Grid3X3 size={17} /> Conversations</button></div>
-    {privateBlocked ? <EmptyState icon={profile.blockedByMe ? Ban : LockKeyhole} title={profile.blockedByMe ? 'You blocked this account' : 'This account is private'} text={profile.blockedByMe ? 'Unblock this person to see their profile and conversations.' : followStatus === 'pending' ? 'Your request is waiting for approval.' : 'Follow this account to see their conversations.'} /> : posts.length === 0 ? <EmptyState icon={MessageSquareText} title="No posts yet" text={isOwner ? 'Your first conversation can start right here.' : 'Nothing has been shared here yet.'} /> : <div className="feed-list profile-feed">{posts.map((post) => <PostCard post={post} key={post.id} onDeleted={(postId) => setPosts((current) => current.filter((item) => item.id !== postId))} />)}</div>}
+    {privateBlocked ? <EmptyState icon={profile.blockedByMe ? Ban : LockKeyhole} title={profile.blockedByMe ? 'You blocked this account' : 'This account is private'} text={profile.blockedByMe ? 'Unblock this person to see their profile and conversations.' : followStatus === 'pending' ? 'Your request is waiting for approval.' : 'Follow this account to see their conversations.'} /> : posts.length === 0 ? <EmptyState icon={MessageSquareText} title="No posts yet" text={isOwner ? 'Your first conversation can start right here.' : 'Nothing has been shared here yet.'} /> : <div className="feed-list feed-list--divided profile-feed">{posts.map((post) => <PostCard post={post} key={post.id} onDeleted={(postId) => { setPosts((current) => current.filter((item) => item.id !== postId)); setProfile((current) => current ? { ...current, _count: { ...current._count, post: Math.max((current._count?.post || 1) - 1, 0) } } : current) }} onUpdated={(updated) => setPosts((current) => current.map((item) => item.id === updated.id ? updated : item))} />)}</div>}
     {isOwner && <EditProfileModal open={editOpen} onClose={() => setEditOpen(false)} profile={profile} onSaved={setProfile} />}
   </div>
 }

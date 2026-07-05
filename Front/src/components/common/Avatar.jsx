@@ -8,9 +8,9 @@ export default function Avatar({ user, size = 'md', className = '' }) {
       aria-label={`${user?.name || 'User'} avatar`}
     >
       {user?.profileImage ? (
-        <img src={user.profileImage} alt="" />
+        <img className="avatar__image" src={user.profileImage} alt="" />
       ) : (
-        <span>{initials(user?.name)}</span>
+        <span className="avatar__fallback">{initials(user?.name)}</span>
       )}
     </span>
   )

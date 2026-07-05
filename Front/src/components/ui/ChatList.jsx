@@ -1,4 +1,4 @@
-import { Archive, Plus, Search } from 'lucide-react'
+import { Archive, LoaderCircle, Plus, RotateCcw, Search } from 'lucide-react'
 import Avatar from '../common/Avatar'
 import { timeAgo } from '../../utils/formatters'
 
@@ -10,7 +10,23 @@ function chatIdentity(item, currentUserId) {
   return chat.conversation.find((member) => member.userId !== currentUserId)?.user || { name: 'Conversation' }
 }
 
-export default function ChatList({ chats, messageResults = [], currentUserId, activeId, search, onSearch, onSelect, onCreateGroup, archived, onToggleArchived }) {
+export default function ChatList({
+  chats,
+  messageResults = [],
+  currentUserId,
+  activeId,
+  unreadByConversation = {},
+  search,
+  onSearch,
+  onSelect,
+  onCreateGroup,
+  archived,
+  onToggleArchived,
+  onUnarchive,
+  unarchivingId
+}) {
+  const formatUnread = (count) => (count > 99 ? '99+' : count)
+
   return (
     <aside className="chat-list">
       <header><div><span className="eyebrow">Messages</span><h1>Talk</h1></div><button className="icon-button" onClick={onCreateGroup} aria-label="Create group"><Plus size={20} /></button></header>
@@ -22,7 +38,21 @@ export default function ChatList({ chats, messageResults = [], currentUserId, ac
         {chats.map((item) => {
           const identity = chatIdentity(item, currentUserId)
           const last = item.conversation.message?.[0]
-          return <button key={item.conversation.id} className={`chat-list__item ${activeId === item.conversation.id ? 'is-active' : ''}`} onClick={() => onSelect(item.conversation.id)}><Avatar user={identity} size="md" /><span><strong>{identity.name}</strong><small>{last?.content || (last?.image ? 'Sent an image' : 'Start the conversation')}</small></span>{last && <time>{timeAgo(last.createdAt)}</time>}</button>
+          const busy = unarchivingId === item.conversation.id
+          const unreadCount = unreadByConversation[item.conversation.id] || 0
+          return <article
+            key={item.conversation.id}
+            className={`chat-list__item ${activeId === item.conversation.id ? 'is-active' : ''}`}
+            onClick={() => onSelect(item.conversation.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onSelect(item.conversation.id)
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          ><Avatar user={identity} size="md" className="chat-list__avatar" /><span><strong>{identity.name}</strong><small>{last?.content || (last?.image ? 'Sent an image' : 'Start the conversation')}</small></span><div className="chat-list__meta">{unreadCount > 0 && !archived && <i className="chat-list__badge">{formatUnread(unreadCount)}</i>}{last && <time>{timeAgo(last.createdAt)}</time>}{archived && <button className="chat-list__restore" onClick={(event) => { event.stopPropagation(); onUnarchive?.(item.conversation.id) }} onKeyDown={(event) => event.stopPropagation()} disabled={busy}>{busy ? <LoaderCircle className="spin" size={13} /> : <RotateCcw size={13} />}<span>Unarchive</span></button>}</div></article>
         })}
       </div>
     </aside>

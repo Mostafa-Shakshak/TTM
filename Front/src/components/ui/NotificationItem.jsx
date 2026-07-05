@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, UserCheck, UserPlus } from 'lucide-react'
+import { Heart, MessageCircle, Repeat2, UserCheck, UserPlus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Avatar from '../common/Avatar'
 import { timeAgo } from '../../utils/formatters'
@@ -6,6 +6,7 @@ import { timeAgo } from '../../utils/formatters'
 const copy = {
   Like: 'liked your post',
   Comment: 'commented on your post',
+  Share: 'shared your post',
   FollowRequest: 'sent you a follow request',
   FollowAccepted: 'accepted your follow request'
 }
@@ -13,6 +14,7 @@ const copy = {
 const icons = {
   Like: Heart,
   Comment: MessageCircle,
+  Share: Repeat2,
   FollowRequest: UserPlus,
   FollowAccepted: UserCheck
 }

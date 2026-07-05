@@ -2,6 +2,7 @@ const router = require('express').Router()
 
 const {
   createPost,
+  sharePost,
   updatePost,
   deletePost,
   getAllPosts,
@@ -14,6 +15,10 @@ const authMiddleware= require('../../middlewares/auth.middleware.js')
 
     router.post (
         '/',authMiddleware,createPost
+    )
+
+    router.post(
+        '/:id/share',authMiddleware,sharePost
     )
 
     router.patch (

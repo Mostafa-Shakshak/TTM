@@ -68,6 +68,11 @@ export const chatService = {
     return data.membership
   },
 
+  async unarchive(conversationId) {
+    const { data } = await api.patch(`/chat/${conversationId}/unarchive`)
+    return data
+  },
+
   async search(query) {
     const { data } = await api.get('/chat/search', { params: { q: query } })
     return data.chats

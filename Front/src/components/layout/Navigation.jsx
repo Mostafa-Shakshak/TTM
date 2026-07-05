@@ -27,7 +27,9 @@ export default function Navigation({ onCreate }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const { unreadCount } = useSocket()
+  const { unreadCount, messageUnreadCount } = useSocket()
+
+  const formatMessagesBadge = (count) => (count > 99 ? '99+' : count)
 
   async function handleLogout() {
     await logout()
@@ -56,6 +58,7 @@ export default function Navigation({ onCreate }) {
               <Icon size={21} />
               <span>{label}</span>
               {label === 'Activity' && unreadCount > 0 && <i className="nav-badge">{unreadCount > 9 ? '9+' : unreadCount}</i>}
+              {label === 'Messages' && messageUnreadCount > 0 && <i className="nav-badge">{formatMessagesBadge(messageUnreadCount)}</i>}
             </Link>
             )
           })}

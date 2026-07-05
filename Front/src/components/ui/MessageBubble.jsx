@@ -3,11 +3,12 @@ import { useState } from 'react'
 import { timeAgo } from '../../utils/formatters'
 import Avatar from '../common/Avatar'
 
-export default function MessageBubble({ message, own, onEdit, onDelete, onReply }) {
+export default function MessageBubble({ message, own, senderUser, onEdit, onDelete, onReply }) {
   const [menu, setMenu] = useState(false)
   const [editing, setEditing] = useState(false)
   const [content, setContent] = useState(message.content || '')
   const seen = message.reciept?.some((receipt) => receipt.status === 'Seen' && receipt.userId !== message.senderId)
+  const sender = senderUser || message.sender
 
   function save() {
     if (!content.trim()) return
@@ -17,7 +18,7 @@ export default function MessageBubble({ message, own, onEdit, onDelete, onReply 
 
   return (
     <article className={`message-bubble ${own ? 'message-bubble--own' : ''}`}>
-      {!own && <Avatar user={message.sender} size="sm" />}
+      {!own && <Avatar user={sender} size="sm" className="message-bubble__avatar" />}
       <div className="message-bubble__content">
         {message.replyTo && <div className="message-bubble__reply">{message.replyTo.content || 'Image'}</div>}
         {editing ? <div className="message-bubble__edit"><input value={content} onChange={(event) => setContent(event.target.value)} autoFocus /><button onClick={save}>Save</button></div> : <>{message.image && <img src={message.image} alt="Shared" />}{message.content && <p>{message.content}</p>}</>}

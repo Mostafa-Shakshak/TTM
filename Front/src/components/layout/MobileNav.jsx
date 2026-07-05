@@ -10,7 +10,8 @@ const items = [
 ]
 
 export default function MobileNav({ onCreate }) {
-  const { unreadCount } = useSocket()
+  const { unreadCount, messageUnreadCount } = useSocket()
+  const formatMessagesBadge = (count) => (count > 99 ? '99+' : count)
   return (
     <nav className="mobile-nav" aria-label="Mobile navigation">
       {items.slice(0, 1).map(({ to, label, icon: Icon, end }) => (
@@ -25,6 +26,7 @@ export default function MobileNav({ onCreate }) {
         <NavLink key={label} to={to} aria-label={label}>
           <Icon size={22} />
           {label === 'Activity' && unreadCount > 0 && <i className="mobile-nav__badge">{unreadCount > 9 ? '9+' : unreadCount}</i>}
+          {label === 'Messages' && messageUnreadCount > 0 && <i className="mobile-nav__badge">{formatMessagesBadge(messageUnreadCount)}</i>}
         </NavLink>
       ))}
     </nav>

@@ -1,4 +1,7 @@
 const prisma = require('../../config/prisma')
+const {
+  getPostsByAuthorService
+} = require('../posts/posts.service')
 
 async function getBlockRelationshipService(
   firstUserId,
@@ -144,44 +147,10 @@ async function getUserPostsService(
     }
   }
 
-  const posts = await prisma.post.findMany({
-    where: {
-      authorId: profileOwnerId
-    },
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          profileImage: true
-        }
-      },
-      likes: {
-        where: {
-          likedById: currentUserId
-        },
-        select: {
-          id: true
-        }
-      },
-      _count: {
-        select: {
-          comments: true,
-          likes: true
-        }
-      }
-    },
-    orderBy: {
-      createdAt: 'desc'
-    }
-  })
-
-  return posts.map(post => ({
-    ...post,
-    likedByMe: post.likes.length > 0,
-    likeId: post.likes[0]?.id || null
-  }))
+  return getPostsByAuthorService(
+    profileOwnerId,
+    currentUserId
+  )
 }
 
 async function searchUsersService(

@@ -2,6 +2,9 @@ const prisma = require('../../config/prisma')
 const {
   deleteUploadedFileService
 } = require('../uploads/upload.service')
+const {
+  createNotificationService
+} = require('../Notifications/notification.service')
 
 function privacyWhere(currentUserId) {
   return {
@@ -50,11 +53,107 @@ function privacyWhere(currentUserId) {
   }
 }
 
+function postInclude(currentUserId) {
+  return {
+    author: {
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        profileImage: true
+      }
+    },
+    likes: {
+      where: {
+        likedById: currentUserId
+      },
+      select: {
+        id: true
+      }
+    },
+    _count: {
+      select: {
+        comments: true,
+        likes: true
+      }
+    }
+  }
+}
+
+function singlePostInclude(currentUserId) {
+  return {
+    ...postInclude(currentUserId),
+    comments: {
+      where: {
+        author: {
+          blockedUsers: {
+            none: {
+              blockedId: currentUserId
+            }
+          },
+          blockedBy: {
+            none: {
+              blockerId: currentUserId
+            }
+          }
+        }
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            profileImage: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    }
+  }
+}
+
+function formatSinglePost(post) {
+  const likes = post.likes || []
+  return {
+    ...post,
+    likes: undefined,
+    likedByMe: likes.length > 0,
+    likeId: likes[0]?.id || null
+  }
+}
+
+async function attachSharedPosts(posts, currentUserId) {
+  const sharedIds = [...new Set(posts.map((post) => post.sharedPostId).filter(Boolean))]
+
+  if (!sharedIds.length) {
+    return posts.map((post) => formatSinglePost({ ...post, sharedPost: null }))
+  }
+
+  const sharedPosts = await prisma.post.findMany({
+    where: {
+      id: { in: sharedIds },
+      ...privacyWhere(currentUserId)
+    },
+    include: postInclude(currentUserId)
+  })
+
+  const sharedMap = new Map(
+    sharedPosts.map((post) => [post.id, formatSinglePost({ ...post, sharedPost: null })])
+  )
+
+  return posts.map((post) => formatSinglePost({
+    ...post,
+    sharedPost: post.sharedPostId ? sharedMap.get(post.sharedPostId) || null : null
+  }))
+}
+
 async function getAccessiblePostService(
   postId,
   currentUserId
 ) {
-
   const post = await prisma.post.findFirst({
     where: {
       id: postId,
@@ -81,20 +180,53 @@ async function getAccessiblePostService(
 }
 
 async function createPostService(data, userId) {
-
   const { image, content } = data
 
   if (!image && !content?.trim()) {
     throw new Error("You can't share empty Post")
   }
 
-  return prisma.post.create({
+  const post = await prisma.post.create({
     data: {
       image,
-      content: content?.trim(),
+      content: content?.trim() || null,
       authorId: userId
-    }
+    },
+    include: postInclude(userId)
   })
+
+  return formatSinglePost({ ...post, sharedPost: null })
+}
+
+async function sharePostService(postId, userId, content) {
+  const targetPost = await getAccessiblePostService(
+    postId,
+    userId
+  )
+
+  const sharedPostId = targetPost.sharedPostId || targetPost.id
+
+  const shared = await prisma.post.create({
+    data: {
+      authorId: userId,
+      content: content?.trim() || null,
+      sharedPostId
+    },
+    include: postInclude(userId)
+  })
+
+  const notification = await createNotificationService({
+    type: 'Share',
+    recipientId: targetPost.authorId,
+    actorId: userId,
+    postId: targetPost.id
+  })
+
+  const [formatted] = await attachSharedPosts([shared], userId)
+  return {
+    post: formatted,
+    notification
+  }
 }
 
 async function updatePostService(
@@ -102,7 +234,6 @@ async function updatePostService(
   userId,
   data
 ) {
-
   const post = await prisma.post.findUnique({
     where: { id: postId }
   })
@@ -125,7 +256,7 @@ async function updatePostService(
       ? post.image
       : data.image || null
 
-  if (!nextContent && !nextImage) {
+  if (!nextContent && !nextImage && !post.sharedPostId) {
     throw new Error(
       "You can't update post to be empty"
     )
@@ -136,18 +267,19 @@ async function updatePostService(
     data: {
       content: nextContent,
       image: nextImage
-    }
+    },
+    include: postInclude(userId)
   })
 
   if (post.image && post.image !== nextImage) {
     await deleteUploadedFileService(post.image)
   }
 
-  return updatedPost
+  const [formatted] = await attachSharedPosts([updatedPost], userId)
+  return formatted
 }
 
 async function deletePostService(postId, userId) {
-
   const post = await prisma.post.findUnique({
     where: { id: postId }
   })
@@ -183,46 +315,21 @@ async function deletePostService(postId, userId) {
 }
 
 async function getAllPostsService(currentUserId) {
-
   const posts = await prisma.post.findMany({
     where: privacyWhere(currentUserId),
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          profileImage: true
-        }
-      },
-      likes: {
-        where: {
-          likedById: currentUserId
-        },
-        select: {
-          id: true
-        }
-      },
-      _count: {
-        select: {
-          comments: true,
-          likes: true
-        }
-      }
-    },
+    include: postInclude(currentUserId),
     orderBy: {
       createdAt: 'desc'
     }
   })
 
-  return formatPosts(posts)
+  return attachSharedPosts(posts, currentUserId)
 }
 
 async function searchPostsService(
   query,
   currentUserId
 ) {
-
   if (!query || !query.trim()) {
     return []
   }
@@ -230,47 +337,39 @@ async function searchPostsService(
   const posts = await prisma.post.findMany({
     where: {
       ...privacyWhere(currentUserId),
-      content: {
-        contains: query.trim(),
-        mode: 'insensitive'
-      }
-    },
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          profileImage: true
-        }
-      },
-      likes: {
-        where: {
-          likedById: currentUserId
+      OR: [
+        {
+          content: {
+            contains: query.trim(),
+            mode: 'insensitive'
+          }
         },
-        select: { id: true }
-      },
-      _count: {
-        select: {
-          comments: true,
-          likes: true
+        {
+          sharedPost: {
+            is: {
+              content: {
+                contains: query.trim(),
+                mode: 'insensitive'
+              }
+            }
+          }
         }
-      }
+      ]
     },
+    include: postInclude(currentUserId),
     orderBy: {
       createdAt: 'desc'
     },
     take: 30
   })
 
-  return formatPosts(posts)
+  return attachSharedPosts(posts, currentUserId)
 }
 
 async function getSinglePostService(
   postId,
   currentUserId
 ) {
-
   await getAccessiblePostService(
     postId,
     currentUserId
@@ -278,80 +377,38 @@ async function getSinglePostService(
 
   const post = await prisma.post.findUnique({
     where: { id: postId },
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          profileImage: true
-        }
-      },
-      comments: {
-        where: {
-          author: {
-            blockedUsers: {
-              none: {
-                blockedId: currentUserId
-              }
-            },
-            blockedBy: {
-              none: {
-                blockerId: currentUserId
-              }
-            }
-          }
-        },
-        include: {
-          author: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              profileImage: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      },
-      likes: {
-        where: {
-          likedById: currentUserId
-        },
-        select: { id: true }
-      },
-      _count: {
-        select: {
-          likes: true,
-          comments: true
-        }
-      }
+    include: singlePostInclude(currentUserId)
+  })
+
+  const [formatted] = await attachSharedPosts([post], currentUserId)
+  return formatted
+}
+
+async function getPostsByAuthorService(
+  authorId,
+  currentUserId
+) {
+  const posts = await prisma.post.findMany({
+    where: {
+      authorId
+    },
+    include: postInclude(currentUserId),
+    orderBy: {
+      createdAt: 'desc'
     }
   })
 
-  return {
-    ...post,
-    likedByMe: post.likes.length > 0,
-    likeId: post.likes[0]?.id || null
-  }
-}
-
-function formatPosts(posts) {
-  return posts.map(post => ({
-    ...post,
-    likedByMe: post.likes.length > 0,
-    likeId: post.likes[0]?.id || null
-  }))
+  return attachSharedPosts(posts, currentUserId)
 }
 
 module.exports = {
   createPostService,
+  sharePostService,
   updatePostService,
   deletePostService,
   getAllPostsService,
   getSinglePostService,
   searchPostsService,
-  getAccessiblePostService
+  getAccessiblePostService,
+  getPostsByAuthorService
 }

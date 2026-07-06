@@ -176,6 +176,7 @@ enum NotificationType {
   Share
   FollowRequest
   FollowAccepted
+  Follow
 }
 
 model Notification {

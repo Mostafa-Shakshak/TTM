@@ -105,7 +105,7 @@ async function followUserService(targetUserId, currentUserId){
       await createNotificationService({
         type: targetUser.isPrivate
           ? 'FollowRequest'
-          : 'FollowAccepted',
+          : 'Follow',
         recipientId: targetUserId,
         actorId: currentUserId,
         followId: follow.id

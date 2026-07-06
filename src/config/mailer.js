@@ -1,40 +1,33 @@
-const nodemailer = require('nodemailer')
-function getTransporter() {
-  const {
-    SMTP_HOST,
-    SMTP_PORT,
-    SMTP_SECURE,
-    SMTP_USER,
-    SMTP_PASS
-  } = process.env
-  if ( !SMTP_HOST ||!SMTP_PORT ||!SMTP_USER ||!SMTP_PASS) {
-    throw new Error('Email service is not configured')
-  }
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT),
-    secure: SMTP_SECURE === 'true',
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS
-    }
-  })
+const { Resend } = require("resend");
+
+function getResendClient() {
+	const { RESEND_API_KEY, RESEND_FROM_EMAIL } = process.env;
+
+	if (!RESEND_API_KEY || !RESEND_FROM_EMAIL) {
+		throw new Error("Resend is not configured");
+	}
+
+	return new Resend(RESEND_API_KEY);
 }
-async function sendPasswordResetEmail(
-  email,
-  name,
-  otp
-) {
-  const transporter = getTransporter()
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
-    to: email,
-    subject: 'Your TTM password reset code',
-    text: `Your TTM password reset code is ${otp}. It expires in one minute.`,
-    html: `
+
+async function sendPasswordResetEmail(email, name, otp) {
+	const resend = getResendClient();
+
+	const { error } = await resend.emails.send({
+		from: `${process.env.RESEND_FROM_NAME || "TTM"} <${process.env.RESEND_FROM_EMAIL}>`,
+		to: email,
+		subject: "Your TTM password reset code",
+		text: `Hi ${name},
+
+Your TTM password reset code is ${otp}.
+
+This code expires in one minute. If you did not request it, you can safely ignore this email.`,
+		html: `
       <div style="background:#f5f5f0;padding:40px 16px;font-family:Arial,sans-serif;color:#191b18">
         <div style="max-width:520px;margin:auto;background:#ffffff;border-radius:20px;padding:32px;border:1px solid #e5e5de">
-          <div style="display:inline-block;background:#191b18;color:#dffd69;padding:10px 14px;border-radius:12px;font-weight:700">TTM</div>
+          <div style="display:inline-block;background:#191b18;color:#dffd69;padding:10px 14px;border-radius:12px;font-weight:700">
+            TTM
+          </div>
 
           <h1 style="font-size:25px;margin:28px 0 10px">
             Reset your password
@@ -57,9 +50,14 @@ async function sendPasswordResetEmail(
           </p>
         </div>
       </div>
-    `
-  })
+    `,
+	});
+
+	if (error) {
+		throw new Error(`Resend email failed: ${error.message}`);
+	}
 }
+
 module.exports = {
-  sendPasswordResetEmail
-}
+	sendPasswordResetEmail,
+};

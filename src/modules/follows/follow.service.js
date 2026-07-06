@@ -7,6 +7,49 @@ const {
   deleteNotificationService
 } = require('../Notifications/notification.service')
 
+const userListSelect = {
+  id: true,
+  name: true,
+  username: true,
+  profileImage: true,
+  bio: true,
+  isPrivate: true
+}
+
+async function getViewerRelationship(currentUserId, targetUserId) {
+  if (!currentUserId || currentUserId === targetUserId) return null
+
+  return prisma.follow.findUnique({
+    where: {
+      followerId_followingId: {
+        followerId: currentUserId,
+        followingId: targetUserId
+      }
+    },
+    select: {
+      id: true,
+      status: true,
+      followerId: true,
+      followingId: true,
+      createdAt: true
+    }
+  })
+}
+
+async function formatFollowListItem(follow, listType, currentUserId) {
+  const user = listType === 'followers'
+    ? follow.follower
+    : follow.following
+
+  return {
+    id: follow.id,
+    status: follow.status,
+    createdAt: follow.createdAt,
+    user,
+    viewerFollow: await getViewerRelationship(currentUserId, user.id)
+  }
+}
+
 async function followUserService(targetUserId, currentUserId){
 
     if(targetUserId==currentUserId){
@@ -40,7 +83,38 @@ async function followUserService(targetUserId, currentUserId){
     }
   })
   if (existingFollow) {
-    throw new Error('Follow request already exists')
+    if (existingFollow.status !== 'Rejected') {
+      return {
+        follow: existingFollow,
+        notification: null
+      }
+    }
+
+    const follow = await prisma.follow.update({
+      where: {
+        id: existingFollow.id
+      },
+      data: {
+        status: targetUser.isPrivate
+          ? 'Pending'
+          : 'Accepted'
+      }
+    })
+
+    const notification =
+      await createNotificationService({
+        type: targetUser.isPrivate
+          ? 'FollowRequest'
+          : 'FollowAccepted',
+        recipientId: targetUserId,
+        actorId: currentUserId,
+        followId: follow.id
+      })
+
+    return {
+      follow,
+      notification
+    }
   }
 const follow = await prisma.follow.create({
     data: {
@@ -223,11 +297,251 @@ async function getFollowRequestsService(
 
   return requests
 }
+
+async function getFollowersService(
+  userId,
+  currentUserId
+) {
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true }
+  })
+
+  if (!user) {
+    throw new Error('User Not Found')
+  }
+
+  const followers = await prisma.follow.findMany({
+    where: {
+      followingId: userId,
+      status: 'Accepted',
+      follower: {
+        blockedUsers: {
+          none: {
+            blockedId: currentUserId
+          }
+        },
+        blockedBy: {
+          none: {
+            blockerId: currentUserId
+          }
+        }
+      }
+    },
+    include: {
+      follower: {
+        select: userListSelect
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  })
+
+  return Promise.all(
+    followers.map(follow =>
+      formatFollowListItem(
+        follow,
+        'followers',
+        currentUserId
+      )
+    )
+  )
+}
+
+async function getFollowingService(
+  userId,
+  currentUserId
+) {
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true }
+  })
+
+  if (!user) {
+    throw new Error('User Not Found')
+  }
+
+  const following = await prisma.follow.findMany({
+    where: {
+      followerId: userId,
+      status: 'Accepted',
+      following: {
+        blockedUsers: {
+          none: {
+            blockedId: currentUserId
+          }
+        },
+        blockedBy: {
+          none: {
+            blockerId: currentUserId
+          }
+        }
+      }
+    },
+    include: {
+      following: {
+        select: userListSelect
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  })
+
+  return Promise.all(
+    following.map(follow =>
+      formatFollowListItem(
+        follow,
+        'following',
+        currentUserId
+      )
+    )
+  )
+}
+
+async function getFollowersCountService(userId) {
+  return prisma.follow.count({
+    where: {
+      followingId: userId,
+      status: 'Accepted'
+    }
+  })
+}
+
+async function getFollowingCountService(userId) {
+  return prisma.follow.count({
+    where: {
+      followerId: userId,
+      status: 'Accepted'
+    }
+  })
+}
+
+async function getFollowCountsService(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true }
+  })
+
+  if (!user) {
+    throw new Error('User Not Found')
+  }
+
+  const [followers, following] = await Promise.all([
+    getFollowersCountService(userId),
+    getFollowingCountService(userId)
+  ])
+
+  return {
+    followers,
+    following
+  }
+}
+
+async function isFollowingService(
+  currentUserId,
+  targetUserId
+) {
+  const follow = await getFollowStatusService(
+    currentUserId,
+    targetUserId
+  )
+
+  return Boolean(
+    follow &&
+    follow.status === 'Accepted'
+  )
+}
+
+async function removeFollowerService(
+  currentUserId,
+  followerUserId
+) {
+
+  if (currentUserId === followerUserId) {
+    throw new Error('Invalid action')
+  }
+
+  const follow = await prisma.follow.findUnique({
+    where: {
+      followerId_followingId: {
+        followerId: followerUserId,
+        followingId: currentUserId
+      }
+    }
+  })
+
+  if (!follow || follow.status !== 'Accepted') {
+    throw new Error('Follower not found')
+  }
+
+  await prisma.follow.delete({
+    where: {
+      id: follow.id
+    }
+  })
+
+  await deleteNotificationService({
+    followId: follow.id
+  })
+
+  return {
+    message: 'Follower removed successfully'
+  }
+}
+
+async function removeFollowingService(
+  currentUserId,
+  followingUserId
+) {
+
+  if (currentUserId === followingUserId) {
+    throw new Error('Invalid action')
+  }
+
+  const follow = await prisma.follow.findUnique({
+    where: {
+      followerId_followingId: {
+        followerId: currentUserId,
+        followingId: followingUserId
+      }
+    }
+  })
+
+  if (!follow) {
+    throw new Error('Follow not found')
+  }
+
+  await prisma.follow.delete({
+    where: {
+      id: follow.id
+    }
+  })
+
+  await deleteNotificationService({
+    followId: follow.id
+  })
+
+  return {
+    message: 'Unfollowed successfully'
+  }
+}
 module.exports = {
   followUserService,
   acceptFollowRequestService,
   rejectFollowRequestService,
   unfollowUserService,getFollowRequestsService,
-  getFollowStatusService
+  getFollowStatusService,
+  getFollowersService,
+  getFollowingService,
+  getFollowersCountService,
+  getFollowingCountService,
+  getFollowCountsService,
+  isFollowingService,
+  removeFollowerService,
+  removeFollowingService
 
 }

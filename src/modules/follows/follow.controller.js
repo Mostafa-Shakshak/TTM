@@ -4,7 +4,12 @@ const {
   rejectFollowRequestService,
   unfollowUserService,
   getFollowRequestsService,
-  getFollowStatusService
+  getFollowStatusService,
+  getFollowersService,
+  getFollowingService,
+  getFollowCountsService,
+  removeFollowerService,
+  removeFollowingService
 } = require('./follow.service')
 const {
   emitNotification
@@ -18,10 +23,12 @@ async function followUser(req, res) {
       req.user.id
     )
 
-    emitNotification(
-      req.app.get('io'),
-      result.notification
-    )
+    if (result.notification) {
+      emitNotification(
+        req.app.get('io'),
+        result.notification
+      )
+    }
 
     return res.status(201).json({
       message: 'Follow request sent successfully',
@@ -146,11 +153,116 @@ async function getFollowStatus(req, res) {
   }
 }
 
+async function getFollowers(req, res) {
+  try {
+
+    const followers = await getFollowersService(
+      req.params.userId,
+      req.user.id
+    )
+
+    return res.status(200).json({
+      followers
+    })
+
+  } catch (err) {
+
+    return res.status(400).json({
+      message: err.message
+    })
+
+  }
+}
+
+async function getFollowing(req, res) {
+  try {
+
+    const following = await getFollowingService(
+      req.params.userId,
+      req.user.id
+    )
+
+    return res.status(200).json({
+      following
+    })
+
+  } catch (err) {
+
+    return res.status(400).json({
+      message: err.message
+    })
+
+  }
+}
+
+async function getFollowCounts(req, res) {
+  try {
+
+    const counts = await getFollowCountsService(
+      req.params.userId
+    )
+
+    return res.status(200).json({
+      counts
+    })
+
+  } catch (err) {
+
+    return res.status(400).json({
+      message: err.message
+    })
+
+  }
+}
+
+async function removeFollower(req, res) {
+  try {
+
+    const result = await removeFollowerService(
+      req.user.id,
+      req.params.followerUserId
+    )
+
+    return res.status(200).json(result)
+
+  } catch (err) {
+
+    return res.status(400).json({
+      message: err.message
+    })
+
+  }
+}
+
+async function removeFollowing(req, res) {
+  try {
+
+    const result = await removeFollowingService(
+      req.user.id,
+      req.params.followingUserId
+    )
+
+    return res.status(200).json(result)
+
+  } catch (err) {
+
+    return res.status(400).json({
+      message: err.message
+    })
+
+  }
+}
+
 module.exports = {
   followUser,
   acceptFollowRequest,
   rejectFollowRequest,
   unfollowUser,
   getFollowRequests,
-  getFollowStatus
+  getFollowStatus,
+  getFollowers,
+  getFollowing,
+  getFollowCounts,
+  removeFollower,
+  removeFollowing
 }

@@ -5,6 +5,7 @@ const {
   getUserPosts,
   searchUsers,
   updateProfile,
+  getBlockedUsers,
   blockUser,
   unblockUser
 } = require('./users.controller')
@@ -15,9 +16,11 @@ const authMiddleware =
 router.use(authMiddleware)
 
 router.get('/search', searchUsers)
+router.get('/blocked', getBlockedUsers)
 router.patch('/profile', updateProfile)
 
 router.post('/:id/block', blockUser)
+router.post('/:id/unblock', unblockUser)
 router.delete('/:id/block', unblockUser)
 
 router.get('/:id/posts', getUserPosts)

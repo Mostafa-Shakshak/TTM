@@ -4,7 +4,12 @@ const {
   followUser,
   acceptFollowRequest,
   rejectFollowRequest,
-  unfollowUser,getFollowRequests,getFollowStatus
+  unfollowUser,getFollowRequests,getFollowStatus,
+  getFollowers,
+  getFollowing,
+  getFollowCounts,
+  removeFollower,
+  removeFollowing
 } = require('./follow.controller')
 
 const authMiddleware =
@@ -41,6 +46,31 @@ router.get(
   '/requests',
   authMiddleware,
   getFollowRequests
+)
+router.get(
+  '/:userId/followers',
+  authMiddleware,
+  getFollowers
+)
+router.get(
+  '/:userId/following',
+  authMiddleware,
+  getFollowing
+)
+router.get(
+  '/:userId/counts',
+  authMiddleware,
+  getFollowCounts
+)
+router.delete(
+  '/followers/:followerUserId',
+  authMiddleware,
+  removeFollower
+)
+router.delete(
+  '/following/:followingUserId',
+  authMiddleware,
+  removeFollowing
 )
 
 module.exports = router

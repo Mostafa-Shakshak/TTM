@@ -266,7 +266,6 @@ async function logoutAllService(userId) {
       revokedAt: new Date()
     }
   })
-
   return {
     message: 'Logged out from all devices successfully'
   }

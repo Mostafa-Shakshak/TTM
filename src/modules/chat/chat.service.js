@@ -43,7 +43,9 @@ async function canMessageUser(
   )
 
   if (block) {
-    throw new Error('Unable to message this user')
+    throw new Error(
+      'You cannot message this user because one of you has blocked the other.'
+    )
   }
 
   if (receiver.isPrivate) {
@@ -279,7 +281,7 @@ async function getSingleChat(senderId, conversationId) {
     conversationId
   )
 
-  return prisma.conversation.findUnique({
+  const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     include: {
       conversation: {
@@ -295,6 +297,29 @@ async function getSingleChat(senderId, conversationId) {
       }
     }
   })
+
+  if (conversation?.type === 'Private') {
+    const otherMember = conversation.conversation.find(
+      member => member.userId !== senderId
+    )
+
+    const block = otherMember
+      ? await getBlockRelationshipService(
+        senderId,
+        otherMember.userId
+      )
+      : null
+
+    return {
+      ...conversation,
+      blocked: Boolean(block),
+      blockMessage: block
+        ? 'You cannot message this user because one of you has blocked the other.'
+        : null
+    }
+  }
+
+  return conversation
 }
 
 async function validateConversationMember(

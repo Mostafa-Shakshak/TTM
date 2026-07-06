@@ -24,6 +24,57 @@ async function getBlockRelationshipService(
   })
 }
 
+async function isBlockedService(
+  currentUserId,
+  targetUserId
+) {
+
+  return prisma.block.findUnique({
+    where: {
+      blockerId_blockedId: {
+        blockerId: currentUserId,
+        blockedId: targetUserId
+      }
+    }
+  })
+}
+
+async function isBlockedBetweenUsersService(
+  firstUserId,
+  secondUserId
+) {
+
+  return getBlockRelationshipService(
+    firstUserId,
+    secondUserId
+  )
+}
+
+async function getBlockedUsersService(
+  currentUserId
+) {
+
+  return prisma.block.findMany({
+    where: {
+      blockerId: currentUserId
+    },
+    include: {
+      blocked: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          profileImage: true,
+          bio: true
+        }
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  })
+}
+
 async function getUserProfileService(
   userId,
   currentUserId
@@ -327,6 +378,15 @@ async function unblockUserService(
   targetUserId
 ) {
 
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true }
+  })
+
+  if (!targetUser) {
+    throw new Error('User Not Found')
+  }
+
   const result = await prisma.block.deleteMany({
     where: {
       blockerId: currentUserId,
@@ -350,5 +410,8 @@ module.exports = {
   updateProfileService,
   blockUserService,
   unblockUserService,
-  getBlockRelationshipService
+  getBlockedUsersService,
+  getBlockRelationshipService,
+  isBlockedService,
+  isBlockedBetweenUsersService
 }

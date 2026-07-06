@@ -4,7 +4,8 @@ const {
   searchUsersService,
   updateProfileService,
   blockUserService,
-  unblockUserService
+  unblockUserService,
+  getBlockedUsersService
 } = require('./users.service')
 
 async function getUserProfile(req, res) {
@@ -66,6 +67,22 @@ async function updateProfile(req, res) {
   }
 }
 
+async function getBlockedUsers(req, res) {
+  try {
+    const blocks = await getBlockedUsersService(
+      req.user.id
+    )
+
+    return res.status(200).json({
+      blockedUsers: blocks
+    })
+  } catch (err) {
+    return res.status(400).json({
+      message: err.message
+    })
+  }
+}
+
 async function blockUser(req, res) {
   try {
     const block = await blockUserService(
@@ -102,6 +119,7 @@ module.exports = {
   getUserPosts,
   searchUsers,
   updateProfile,
+  getBlockedUsers,
   blockUser,
   unblockUser
 }

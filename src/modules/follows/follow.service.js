@@ -126,15 +126,12 @@ const follow = await prisma.follow.create({
       : 'Accepted'
     }
   })
-  const notification =
-    await createNotificationService({
-      type: targetUser.isPrivate
-        ? 'FollowRequest'
-        : 'FollowAccepted',
-      recipientId: targetUserId,
-      actorId: currentUserId,
-      followId: follow.id
-    })
+  const notification = await createNotificationService({
+		type: targetUser.isPrivate ? "FollowRequest" : "Follow",
+		recipientId: targetUserId,
+		actorId: currentUserId,
+		followId: follow.id,
+	});
 
   return {
     follow,
